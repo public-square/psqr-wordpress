@@ -1,0 +1,35 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://vpsqr.com/ns/did-psqr/v1"
+  ],
+  "id": "did:psqr:{domain/path}",
+  "psqr": {
+    "publicIdentity": {
+      "name": "Name",
+      "tagline": "Tagline string",
+      "image": "https://image.url/img.jpg",
+      "url": "https://profile.url",
+      "description": "A string describing the publisher.",
+      "bio": "A string containing biographical information for a human publisher."
+
+    },
+    "publicKeys": [
+      {
+        "crv": "P-384",
+        "kty": "EC",
+        "x": "{hash}",
+        "y": "{hash}",
+        "alg": "ES384",
+        "kid": "did:psqr:{domain/path}#{keyName}"
+      }
+    ],
+    "permissions": [
+      {
+        "grant": ["publish | provenance | curate | list | admin"],
+        "kid": "did:psqr:{domain/path}#{keyName}"
+      }
+    ],
+    "updated": 1644528351309
+  }
+}

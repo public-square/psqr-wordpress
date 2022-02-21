@@ -38,6 +38,43 @@ news feed. The first commercial use of Virtual Public Square data is to populate
 on websites containing curated content from a set of publishers that seek to cross-promote
 each other to keep readers engaged and maximize audience attention.
 
+## API Endpoints
+
+This plugin sets up some REST api endpoints to allow for the management of user DIDs.
+Each endpoint uses the prefix `/wp-json/psqr/v{number}/`, where the version may increase in future releases.
+Some are public and others require admin privileges. This is verified through an authentication cookie
+and a Wordpress nonce that can be appended to the end of the url with `?_wpnonce={nonce}` or as a header
+named `X-WP-Nonce`.
+
+### Endpoints
+
+---
+**Current Prefix:** `/wp-json/psqr/v1/`
+
+---
+
+**GET** `/author/{name}`
+
+Get the DID:PSQR document for the user specified
+
+**Authentication:** none
+
+**Returns:** JSON response
+* Success(200): Full DID:PSQR document
+* Error(404): json with error message
+
+---
+
+**POST/PUT/PATCH** `/author/{name}`
+
+Add or Update the DID:PSQR document for the user specified
+
+**Authentication:** requires Admin authentication cookie and WP nonce
+
+**Returns:** JSON response
+* Success(200): json with success message
+* Error(400): json with error message
+
 ## Frequently Asked Questions
 
 ### What are Decentralized IDentities (DIDs)?

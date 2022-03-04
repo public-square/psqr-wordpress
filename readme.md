@@ -134,9 +134,9 @@ potentially preserved by someone, somewhere.
 ### Screenshots
 
 1. DID column show in the user management table
-![user management table](screenshots/did-user-column.png?raw=true "Title")
+![user management table](assets/screenshot-1.png?raw=true "Title")
 2. DID upload modal
-![upload modal](screenshots/did-upload-modal.png?raw=true "Title")
+![upload modal](assets/screenshot-2.png?raw=true "Title")
 
 ### Changelog
 

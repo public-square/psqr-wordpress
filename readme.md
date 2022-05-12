@@ -3,7 +3,7 @@ Requires WordPress version: 5.4+
 
 Tested up to: 5.9
 
-Requires PHP: 7.0
+Requires PHP: 7.4
 
 License: GPLv2
 
@@ -139,6 +139,9 @@ potentially preserved by someone, somewhere.
 ![upload modal](assets/screenshot-2.png?raw=true "Title")
 
 ### Changelog
+
+#### 0.1.1
+* Add ability to update DIDs with PUT request and delete DIDs with DELETE
 
 #### 0.1.0
 * Initial release

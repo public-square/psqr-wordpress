@@ -3,8 +3,8 @@ Contributors: psqr
 Tags: did, identity, did:psqr
 Requires at least: 5.4
 Tested up to: 5.9
-Requires PHP: 7.0
-Stable tag: 0.1.0
+Requires PHP: 7.4
+Stable tag: 0.1.1
 License: GPLv2
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -72,6 +72,9 @@ The internet is forever, though, and it is not possible to ensure that every cop
 2. DID upload modal
 
 == Changelog ==
+
+= 0.1.1 =
+* Add ability to update DIDs with PUT request and delete DIDs with DELETE
 
 = 0.1.0 =
 * Initial release

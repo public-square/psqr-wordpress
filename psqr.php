@@ -53,7 +53,7 @@ if ( !class_exists( 'PSQR' ) ) {
             ],
             'invalid_jws' => [
                 'code'    => 'invalid_jws',
-                'message' => 'The provided JWS was not signed correctly or does not match the did',
+                'message' => 'The provided JWS was not signed correctly or is somehow invalid',
                 'data'    => [
                     'status' => 401
                 ]
@@ -229,6 +229,25 @@ if ( !class_exists( 'PSQR' ) ) {
             return file_put_contents($full_path . 'identity.json', json_encode($file_data));
         }
 
+        function delete_identity($path) {
+            // determine absolute file path
+            $upload_dir = wp_upload_dir();
+            $base_path = trailingslashit( $upload_dir['basedir'] ) . 'psqr-identities/';
+            $full_path = $base_path . $path . '/';
+
+            // if dir doesn't exist return false
+            if (is_dir($full_path) === false) {
+                return false;
+            }
+
+            $rm_file = unlink($full_path . 'identity.json');
+            if ($rm_file === false) {
+                return false;
+            }
+
+            return rmdir($full_path);
+        }
+
         /**
          * validate jws token string with pubkey from specified did.
          *
@@ -237,7 +256,7 @@ if ( !class_exists( 'PSQR' ) ) {
          *
          * @return bool is it valid
          */
-        function validate_JWS(string $path, string $token): bool
+        function validate_update(string $path, string $token): bool
         {
             $jws = $this->serializer_manager->unserialize($token);
             $kid = $jws->getSignatures()[0]->getProtectedHeader()['kid'];
@@ -258,12 +277,29 @@ if ( !class_exists( 'PSQR' ) ) {
                 return false;
             }
 
+            // verify key used has admin permission
+            $perms    = $didDoc->psqr->permissions;
+            $keyGrant = false;
+
+            for ($i = 0; $i < \count($perms); ++$i) {
+                $p = $perms[$i];
+                if ($p->kid === $kid) {
+                    $keyGrant = $p->grant;
+
+                    break;
+                }
+            }
+            // return false if no grant was found or doesn't contain admin
+            if ($keyGrant === false || in_array('admin', $keyGrant) === false) {
+                return false;
+            }
+
             // try to find valid public keys
             $keys   = $didDoc->psqr->publicKeys;
             $pubKey = false;
 
-            for ($i = 0; $i < \count($keys); ++$i) {
-                $k = $keys[$i];
+            for ($j = 0; $j < \count($keys); ++$j) {
+                $k = $keys[$j];
                 if ($k->kid === $kid) {
                     $pubKey = new JWK((array) $k, 0);
 
@@ -292,6 +328,10 @@ if ( !class_exists( 'PSQR' ) ) {
                     return $this->update_did('', $body);
                 }
 
+                if (strtoupper($method) === 'DELETE') {
+                    return $this->delete_did('', $body);
+                }
+
                 $identity = $this->get_identity();
 
                 if ($identity === false) {
@@ -305,6 +345,10 @@ if ( !class_exists( 'PSQR' ) ) {
 
                 if (strtoupper($method) === 'PUT') {
                     return $this->update_did($file_path, $body);
+                }
+
+                if (strtoupper($method) === 'DELETE') {
+                    return $this->delete_did($file_path, $body);
                 }
 
                 foreach (PSQR::VALID_HEADERS as $val) {
@@ -325,7 +369,7 @@ if ( !class_exists( 'PSQR' ) ) {
 
         function update_did(string $path, string $body)
         {
-            $signature_valid = $this->validate_JWS($path, $body);
+            $signature_valid = $this->validate_update($path, $body);
 
             if ($signature_valid === false) {
                 wp_send_json(PSQR::RESPONSES['invalid_jws'], 401);
@@ -334,12 +378,43 @@ if ( !class_exists( 'PSQR' ) ) {
             $jws = $this->serializer_manager->unserialize($body);
             $newDid = json_decode($jws->getPayload(), true);
 
+            // validate doc
+            $valid_resp = $this->validate_identity($newDid);
+            if ($valid_resp['valid'] === false) {
+                wp_send_json([
+                    'code'    => 'did_invalid',
+                    'message' => $valid_resp['message'],
+                    'data'    => [
+                        'status' => 400
+                    ]
+                ], 400);
+            }
+
             $response = $this->store_identity($path, $newDid);
             if ($response === false) {
                 wp_send_json(PSQR::RESPONSES['did_error'], 400);
             }
 
             wp_send_json($newDid, 200);
+        }
+
+        public function delete_did(string $path, string $body)
+        {
+            $signature_valid = $this->validate_update($path, $body);
+
+            if ($signature_valid === false) {
+                wp_send_json(PSQR::RESPONSES['invalid_jws'], 401);
+            }
+
+            $response = $this->delete_identity($path);
+            if ($response === false) {
+                wp_send_json(PSQR::RESPONSES['did_error'], 400);
+            }
+
+            wp_send_json([
+                'code'    => 'did_deleted',
+                'message' => 'DID was successfully deleted',
+            ], 200);
         }
 
         function generate_did_string($name) {

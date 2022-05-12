@@ -1,0 +1,25 @@
+{
+    "name": "psqr/virtual-public-square",
+    "description": "Virtual Public Squares operate on identity. Add self-hosted, cryptographically verifiable, decentralized identity to your site and authors.",
+    "type": "wordpress-plugin",
+    "require": {
+        "web-token/jwt-core": "2.2",
+        "web-token/jwt-signature": "2.2",
+        "web-token/jwt-signature-algorithm-ecdsa": "2.2"
+    },
+    "license": "GPLv2",
+    "authors": [
+        {
+            "name": "Virtual Public Square",
+            "email": "protocol@vpsqr.com"
+        }
+    ],
+    "config": {
+        "vendor-dir": "lib"
+    },
+    "autoload": {
+        "psr-4": {
+            "Jose\\": "src"
+        }
+    }
+}

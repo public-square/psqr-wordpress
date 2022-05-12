@@ -140,7 +140,7 @@ if ( !class_exists( 'PSQR' ) ) {
         }
 
         function api_put_response($request) {
-            $body = json_decode($request->get_body());
+            $body = json_decode($request->get_body(), false);
             $name = $request->get_url_params()['name'];
 
             $request_did = $this->generate_did_string($name);
@@ -189,7 +189,7 @@ if ( !class_exists( 'PSQR' ) ) {
 
             // retrieve and parse file data
             $file_data = file_get_contents($full_path);
-            $identity_obj = json_decode($file_data);
+            $identity_obj = json_decode($file_data, false);
 
             // return empty object if no data found
             if ($identity_obj === null) {
@@ -210,6 +210,12 @@ if ( !class_exists( 'PSQR' ) ) {
                     'message' => 'Invalid DID:PSQR structure'
                 ];
             }
+
+
+            return [
+                'valid' => true,
+                'message' => 'Valid DID:PSQR structure'
+            ];
         }
 
         function store_identity($path, $file_data) {
@@ -258,8 +264,14 @@ if ( !class_exists( 'PSQR' ) ) {
          */
         function validate_update(string $path, string $token): bool
         {
-            $jws = $this->serializer_manager->unserialize($token);
-            $kid = $jws->getSignatures()[0]->getProtectedHeader()['kid'];
+            $kid;
+            $jws;
+            try {
+                $jws = $this->serializer_manager->unserialize($token);
+                $kid = $jws->getSignatures()[0]->getProtectedHeader()['kid'];
+            } catch (\Throwable $th) {
+                return false;
+            }
 
             // get didDoc specified in header
             $matches;
@@ -274,6 +286,24 @@ if ( !class_exists( 'PSQR' ) ) {
             $didDoc = $this->get_identity($path);
 
             if ($didDoc === false) {
+                return false;
+            }
+
+
+            // try to find valid public keys
+            $keys   = $didDoc->psqr->publicKeys;
+            $pubKey = false;
+
+            for ($j = 0; $j < \count($keys); ++$j) {
+                $k = $keys[$j];
+                if ($k->kid === $kid) {
+                    $pubKey = new JWK((array) $k, 0);
+
+                    break;
+                }
+            }
+            // return false if no pubKey was found
+            if ($pubKey === false) {
                 return false;
             }
 
@@ -294,23 +324,6 @@ if ( !class_exists( 'PSQR' ) ) {
                 return false;
             }
 
-            // try to find valid public keys
-            $keys   = $didDoc->psqr->publicKeys;
-            $pubKey = false;
-
-            for ($j = 0; $j < \count($keys); ++$j) {
-                $k = $keys[$j];
-                if ($k->kid === $kid) {
-                    $pubKey = new JWK((array) $k, 0);
-
-                    break;
-                }
-            }
-            // return false if no pubKey was found
-            if ($pubKey === false) {
-                return false;
-            }
-
             return $this->jws_verifier->verifyWithKey($jws, $pubKey, 0);
         }
 
@@ -318,18 +331,23 @@ if ( !class_exists( 'PSQR' ) ) {
         function rewrite_request($query) {
             $path = $query->request;
             $method = $_SERVER['REQUEST_METHOD'];
-            $body = file_get_contents('php://input');
+
+            // retrieve, sanitize, and validate JWS string if present
+            $jws_matches;
+            $raw_input = file_get_contents('php://input');
+            preg_match('/[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/', $raw_input, $jws_matches);
+            $jws = empty($jws_matches) ? '' : $jws_matches[0];
 
             $headers = array_change_key_case(array_map('strtolower', getallheaders()), CASE_LOWER);
             $accept_header = $headers['accept'];
 
             if ($path === '.well-known/psqr') {
                 if (strtoupper($method) === 'PUT') {
-                    return $this->update_did('', $body);
+                    return $this->update_did('', $jws);
                 }
 
                 if (strtoupper($method) === 'DELETE') {
-                    return $this->delete_did('', $body);
+                    return $this->delete_did('', $jws);
                 }
 
                 $identity = $this->get_identity();
@@ -344,11 +362,11 @@ if ( !class_exists( 'PSQR' ) ) {
                 $file_path = '/author/' . $author_name;
 
                 if (strtoupper($method) === 'PUT') {
-                    return $this->update_did($file_path, $body);
+                    return $this->update_did($file_path, $jws);
                 }
 
                 if (strtoupper($method) === 'DELETE') {
-                    return $this->delete_did($file_path, $body);
+                    return $this->delete_did($file_path, $jws);
                 }
 
                 foreach (PSQR::VALID_HEADERS as $val) {
@@ -376,7 +394,7 @@ if ( !class_exists( 'PSQR' ) ) {
             }
 
             $jws = $this->serializer_manager->unserialize($body);
-            $newDid = json_decode($jws->getPayload(), true);
+            $newDid = json_decode($jws->getPayload(), false);
 
             // validate doc
             $valid_resp = $this->validate_identity($newDid);

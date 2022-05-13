@@ -82,8 +82,10 @@ in request data
 
 Delete the DID:PSQR document for the user specified
 
-**Authentication:** requires WP nonce and revised DID document in compact serialization
-in request data
+**Authentication:** requires revised DID document in compact serialization
+in request body data
+
+See: https://datatracker.ietf.org/doc/html/rfc7515#section-3.1
 
 **Returns:** JSON response
 * Success(200): json with success message

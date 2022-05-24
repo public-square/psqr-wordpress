@@ -4,7 +4,7 @@ Tags: did, identity, did:psqr
 Requires at least: 5.4
 Tested up to: 5.9
 Requires PHP: 7.4
-Stable tag: 0.1.1
+Stable tag: 0.1.2
 License: GPLv2
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,6 +20,14 @@ In the event that any Virtual Public Square blocks content from a publisher, tha
 Similarly, publishers are free to set up their own Virtual Public Squares and ingest the content from existing Virtual Public Squares. In this fashion, Virtual Public Squares impose practical disincentives to censorship without infringing on the rights of speech or association of any of the participants.
 
 The primary use of Virtual Public Square technology is to acquire content from specified publishers without third party interference. This will often appear in the format of a news feed. The first commercial use of Virtual Public Square data is to populate widgets on websites containing curated content from a set of publishers that seek to cross-promote each other to keep readers engaged and maximize audience attention.
+
+== Required PHP Extensions ==
+
+The following PHP extensions are required to update and delete DIDs with an API call:
+
+* json
+* mbstring
+* openssl
 
 == Frequently Asked Questions ==
 
@@ -72,6 +80,11 @@ The internet is forever, though, and it is not possible to ensure that every cop
 2. DID upload modal
 
 == Changelog ==
+
+= 0.1.2 =
+* Update token format to {token: JWSstring}
+* Add checks for required php extensions
+* Add debug logs
 
 = 0.1.1 =
 * Add ability to update DIDs with PUT request and delete DIDs with DELETE

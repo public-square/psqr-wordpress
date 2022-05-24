@@ -38,6 +38,14 @@ news feed. The first commercial use of Virtual Public Square data is to populate
 on websites containing curated content from a set of publishers that seek to cross-promote
 each other to keep readers engaged and maximize audience attention.
 
+## Required PHP Extensions
+
+The following PHP extensions are required to update and delete DIDs with an API call:
+
+* json
+* mbstring
+* openssl
+
 ## API Endpoints
 
 This plugin sets up some REST api endpoints to allow for the management of user DIDs.
@@ -139,6 +147,11 @@ potentially preserved by someone, somewhere.
 ![upload modal](assets/screenshot-2.png?raw=true "Title")
 
 ### Changelog
+
+#### 0.1.2
+* Update token format to {token: JWSstring}
+* Add checks for required php extensions
+* Add debug logs
 
 #### 0.1.1
 * Add ability to update DIDs with PUT request and delete DIDs with DELETE

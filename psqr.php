@@ -6,7 +6,7 @@
 Plugin Name: Virtual Public Square
 Plugin URI: https://vpsqr.com/
 Description: Virtual Public Squares operate on identity. Add self-hosted, cryptographically verifiable, decentralized identity to your site and authors.
-Version: 0.1.1
+Version: 0.1.2
 Author: Virtual Public Square
 Author URI: https://vpsqr.com
 License: GPLv2
@@ -31,6 +31,17 @@ use Jose\Component\Signature\JWSVerifier;
 use Jose\Component\Signature\Serializer\CompactSerializer;
 use Jose\Component\Signature\Serializer\JWSSerializerManager;
 
+if ( ! function_exists('write_log')) {
+    function write_log ( $log )  {
+        $prefix = '|| Virtual Public Square || ';
+        if ( is_array( $log ) || is_object( $log ) ) {
+            error_log( $prefix . print_r( $log, true ) );
+        } else {
+            error_log( $prefix . $log );
+        }
+    }
+}
+
 if ( !class_exists( 'PSQR' ) ) {
 
     class PSQR
@@ -40,6 +51,13 @@ if ( !class_exists( 'PSQR' ) ) {
         const VALID_HEADERS = [
             'application/json',
             'application/did+json'
+        ];
+
+        // set required php extensions
+        const REQUIRED_EXT = [
+            'json',
+            'mbstring',
+            'openssl'
         ];
 
         // set some standard responses
@@ -64,14 +82,24 @@ if ( !class_exists( 'PSQR' ) ) {
                 'data'    => [
                     'status' => 400
                 ]
-            ]
+            ],
+            'ext_missing' => [
+                'code'    => 'ext_missing',
+                'message' => 'The required php extensions are missing',
+                'data'    => [
+                    'status' => 500
+                ]
+            ],
         ];
 
-        private $available_dids = [];
+        private $ext_missing = array();
+        private $available_dids = array();
         private JWSSerializerManager $serializer_manager;
         private JWSVerifier $jws_verifier;
 
         function __construct() {
+            // check for missing php extensions
+            $this->ext_missing = $this->check_extensions();
 
             // create necessary directories
             $this->setup_dirs();
@@ -83,6 +111,9 @@ if ( !class_exists( 'PSQR' ) ) {
             $this->serializer_manager = new JWSSerializerManager([
                 new CompactSerializer(),
             ]);
+
+            // add notice on admin page
+            add_action('after_plugin_row', array($this, 'add_ext_warning'));
 
             // setup did and api response
             add_action('parse_request', array($this, 'rewrite_request'));
@@ -109,6 +140,18 @@ if ( !class_exists( 'PSQR' ) ) {
             add_filter( 'manage_users_custom_column', array($this, 'add_did_value'), 10, 3 );
         }
 
+        static function check_extensions(): array {
+            $ext_missing = [];
+            foreach (PSQR::REQUIRED_EXT as $ext) {
+                if (extension_loaded($ext) === false) {
+                    write_log('WARNING: missing php extension required for DID validation: ' . $ext);
+                    array_push($ext_missing, $ext);
+                }
+            }
+
+            return $ext_missing;
+        }
+
         static function setup_dirs() {
             // determine dir path
             $upload_dir = wp_upload_dir();
@@ -119,6 +162,7 @@ if ( !class_exists( 'PSQR' ) ) {
             if (is_dir($author_dir) === false) {
                 $dir_resp = mkdir($author_dir, 0777, true);
                 if ($dir_resp === false) {
+                    write_log('ERROR: unable to create psqr-identities directory');
                     return false;
                 }
             }
@@ -133,6 +177,8 @@ if ( !class_exists( 'PSQR' ) ) {
             }
 
             if ($identity === false) {
+                write_log('ERROR: Unable to find DID from provided data');
+                write_log($data);
                 wp_send_json(PSQR::RESPONSES['did_missing'], 404);
             }
 
@@ -146,6 +192,7 @@ if ( !class_exists( 'PSQR' ) ) {
             $request_did = $this->generate_did_string($name);
 
             if (isset($body->id) === false || $body->id !== $request_did) {
+                write_log('ERROR: DID mismatch for ' . $request_did);
                 wp_send_json([
                     'code'    => 'did_mismatch',
                     'message' => 'Incorrect did:psqr provided, must match: ' . $request_did,
@@ -158,6 +205,7 @@ if ( !class_exists( 'PSQR' ) ) {
             // validate doc
             $valid_resp = $this->validate_identity($body);
             if ($valid_resp['valid'] === false) {
+                write_log('ERROR: invalid DID ' . $valid_resp['message']);
                 wp_send_json([
                     'code'    => 'did_invalid',
                     'message' => $valid_resp['message'],
@@ -169,6 +217,7 @@ if ( !class_exists( 'PSQR' ) ) {
 
             $response = $this->store_identity('/author/' . $name, $body);
             if ($response === false) {
+                write_log('ERROR: Unable to store identity for ' . $name);
                 wp_send_json(PSQR::RESPONSES['did_error'], 400);
             }
 
@@ -192,7 +241,7 @@ if ( !class_exists( 'PSQR' ) ) {
             $identity_obj = json_decode($file_data, false);
 
             // return empty object if no data found
-            if ($identity_obj === null) {
+            if ($identity_obj === NULL) {
                 return false;
             }
 
@@ -264,31 +313,33 @@ if ( !class_exists( 'PSQR' ) ) {
          */
         function validate_update(string $path, string $token): bool
         {
-            $kid;
-            $jws;
+            $kid = NULL;
+            $jws = '';
             try {
                 $jws = $this->serializer_manager->unserialize($token);
                 $kid = $jws->getSignatures()[0]->getProtectedHeader()['kid'];
             } catch (\Throwable $th) {
+                write_log('ERROR: Unable to serialize JWS');
                 return false;
             }
 
             // get didDoc specified in header
-            $matches;
+            $matches = NULL;
             preg_match('/did:psqr:[^\/]+([^#]+)/', $kid, $matches);
             $kidPath = $matches[1];
 
             // fail if path from signature doesn't match request path
             if ($path !== $kidPath) {
+                write_log('ERROR: JWS signature path does not match request path');
                 return false;
             }
 
             $didDoc = $this->get_identity($path);
 
             if ($didDoc === false) {
+                write_log('ERROR: Unable to retrieve DID doc for JWS');
                 return false;
             }
-
 
             // try to find valid public keys
             $keys   = $didDoc->psqr->publicKeys;
@@ -297,13 +348,14 @@ if ( !class_exists( 'PSQR' ) ) {
             for ($j = 0; $j < \count($keys); ++$j) {
                 $k = $keys[$j];
                 if ($k->kid === $kid) {
-                    $pubKey = new JWK((array) $k, 0);
+                    $pubKey = new JWK((array) $k);
 
                     break;
                 }
             }
             // return false if no pubKey was found
             if ($pubKey === false) {
+                write_log('ERROR: No pubkey matching ' . $kid . ' found in current DID doc');
                 return false;
             }
 
@@ -321,6 +373,7 @@ if ( !class_exists( 'PSQR' ) ) {
             }
             // return false if no grant was found or doesn't contain admin
             if ($keyGrant === false || in_array('admin', $keyGrant) === false) {
+                write_log('ERROR: No admin grant found for ' . $kid . ' in current DID doc');
                 return false;
             }
 
@@ -332,14 +385,33 @@ if ( !class_exists( 'PSQR' ) ) {
             $path = $query->request;
             $method = $_SERVER['REQUEST_METHOD'];
 
+            error_log('----------------------------------------------------------------------------');
+            write_log('INFO: Evaluating ' . $method . ' request to path ' . $path);
+
             // retrieve, sanitize, and validate JWS string if present
-            $jws_matches;
+            $jws_matches = array();
             $raw_input = file_get_contents('php://input');
-            preg_match('/[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/', $raw_input, $jws_matches);
-            $jws = empty($jws_matches) ? '' : $jws_matches[0];
+
+            $jws = '';
+            $json_object = json_decode($raw_input, false);
+
+            if ($json_object !== NULL) {
+                preg_match('/[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/', $json_object->token, $jws_matches, PREG_UNMATCHED_AS_NULL);
+                $jws = empty($jws_matches) ? '' : $json_object->token;
+            }
+
+            write_log('INFO: Parsed JWS from response: ' . $jws);
 
             $headers = array_change_key_case(array_map('strtolower', getallheaders()), CASE_LOWER);
             $accept_header = $headers['accept'];
+
+            // ensure required php extensions exist for PUTs and DELETEs
+            if ((strtoupper($method) === 'PUT' || strtoupper($method) === 'DELETE') && count($this->ext_missing) !== 0) {
+                write_log('ERROR: there are some required php extensions missing from the current installation: ' . implode(", ", $this->ext_missing));
+                $error_response = PSQR::RESPONSES['ext_missing'];
+                $error_response['message'] = $error_response['message'] . ': ' . implode(", ", $this->ext_missing);
+                wp_send_json($error_response, 500);
+            }
 
             if ($path === '.well-known/psqr') {
                 if (strtoupper($method) === 'PUT') {
@@ -387,9 +459,11 @@ if ( !class_exists( 'PSQR' ) ) {
 
         function update_did(string $path, string $body)
         {
+            write_log('INFO: updating DID with path ' . $path);
             $signature_valid = $this->validate_update($path, $body);
 
             if ($signature_valid === false) {
+                write_log('ERROR: Signature is not valid');
                 wp_send_json(PSQR::RESPONSES['invalid_jws'], 401);
             }
 
@@ -399,6 +473,7 @@ if ( !class_exists( 'PSQR' ) ) {
             // validate doc
             $valid_resp = $this->validate_identity($newDid);
             if ($valid_resp['valid'] === false) {
+                write_log('ERROR: DID from JWS is not valid');
                 wp_send_json([
                     'code'    => 'did_invalid',
                     'message' => $valid_resp['message'],
@@ -410,25 +485,31 @@ if ( !class_exists( 'PSQR' ) ) {
 
             $response = $this->store_identity($path, $newDid);
             if ($response === false) {
+                write_log('ERROR: there was an issue storing the DID for ' . $path);
                 wp_send_json(PSQR::RESPONSES['did_error'], 400);
             }
 
+            write_log('INFO: update successful');
             wp_send_json($newDid, 200);
         }
 
         public function delete_did(string $path, string $body)
         {
+            write_log('INFO: deleting DID with path ' . $path);
             $signature_valid = $this->validate_update($path, $body);
 
             if ($signature_valid === false) {
+                write_log('ERROR: Signature is not valid');
                 wp_send_json(PSQR::RESPONSES['invalid_jws'], 401);
             }
 
             $response = $this->delete_identity($path);
             if ($response === false) {
+                write_log('ERROR: there was an error deleting the DID for ' . $path);
                 wp_send_json(PSQR::RESPONSES['did_error'], 400);
             }
 
+            write_log('INFO: delete successful');
             wp_send_json([
                 'code'    => 'did_deleted',
                 'message' => 'DID was successfully deleted',
@@ -440,6 +521,16 @@ if ( !class_exists( 'PSQR' ) ) {
             $did = 'did:psqr:' . $_SERVER['HTTP_HOST'] . $path;
 
             return $did;
+        }
+
+        function add_ext_warning(string $plugin_file) {
+            // add notice if necessary
+            if ($plugin_file === 'psqr/psqr.php' && count($this->ext_missing) !== 0) {
+                echo '<div class="notice notice-warning">
+                        <p><strong>Virtual Public Square</strong></p>
+                        <p>You are missing some required php extensions to manage DIDs. Please install the following: ' . implode(", ", $this->ext_missing) . '</p>
+                    </div>';
+            }
         }
 
         // add column to user table

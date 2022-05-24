@@ -73,11 +73,27 @@ Get the DID:PSQR document for the user specified
 
 ---
 
-**POST/PUT/PATCH** `/author/{name}`
+**PUT** `/author/{name}`
 
-Add or Update the DID:PSQR document for the user specified
+Update the DID:PSQR document for the user specified
 
-**Authentication:** requires Admin authentication cookie and WP nonce
+**Authentication:** requires WP nonce and revised DID document in compact serialization
+in request data
+
+**Returns:** JSON response
+* Success(200): json with success message
+* Error(400): json with error message
+
+---
+
+**DELETE** `/author/{name}`
+
+Delete the DID:PSQR document for the user specified
+
+**Authentication:** requires revised DID document in compact serialization
+in request body data
+
+See: https://datatracker.ietf.org/doc/html/rfc7515#section-3.1
 
 **Returns:** JSON response
 * Success(200): json with success message

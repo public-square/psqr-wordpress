@@ -1,7 +1,7 @@
 # Virtual Public Square WordPress Plugin
 Requires WordPress version: 5.4+
 
-Tested up to: 5.9
+Tested up to: 6.0.2
 
 Requires PHP: 7.4
 

@@ -2,7 +2,7 @@
 Contributors: psqr
 Tags: did, identity, did:psqr
 Requires at least: 5.4
-Tested up to: 5.9
+Tested up to: 6.0.2
 Requires PHP: 7.4
 Stable tag: 0.1.2
 License: GPLv2

@@ -6,7 +6,7 @@
 Plugin Name: Virtual Public Square
 Plugin URI: https://vpsqr.com/
 Description: Virtual Public Squares operate on identity. Add self-hosted, cryptographically verifiable, decentralized identity to your site and authors.
-Version: 0.1.2
+Version: 0.1.3
 Author: Virtual Public Square
 Author URI: https://vpsqr.com
 License: GPLv2
@@ -96,6 +96,7 @@ if ( !class_exists( 'PSQR' ) ) {
         private $available_dids = array();
         private JWSSerializerManager $serializer_manager;
         private JWSVerifier $jws_verifier;
+        private $path_prefix = '';
 
         function __construct() {
             // check for missing php extensions
@@ -114,6 +115,9 @@ if ( !class_exists( 'PSQR' ) ) {
 
             // add notice on admin page
             add_action('after_plugin_row', array($this, 'add_ext_warning'));
+
+            // get any path prefixes
+            $this->path_prefix = $this->get_prefix();
 
             // setup did and api response
             add_action('parse_request', array($this, 'rewrite_request'));
@@ -150,6 +154,14 @@ if ( !class_exists( 'PSQR' ) ) {
             }
 
             return $ext_missing;
+        }
+
+        static function get_prefix() {
+            $url = get_site_url();
+            $host = $_SERVER['HTTP_HOST'];
+            $path = preg_replace('/https?:\/\/' . $host . '/', '', $url);
+
+            return $path;
         }
 
         static function setup_dirs() {
@@ -518,7 +530,7 @@ if ( !class_exists( 'PSQR' ) ) {
 
         function generate_did_string($name) {
             $path = '/author/' . $name;
-            $did = 'did:psqr:' . $_SERVER['HTTP_HOST'] . $path;
+            $did = 'did:psqr:' . $_SERVER['HTTP_HOST'] . $this->path_prefix . $path;
 
             return $did;
         }
@@ -550,12 +562,13 @@ if ( !class_exists( 'PSQR' ) ) {
             if ($column_name === 'did') {
                 // get user values
                 $user = get_user_by('id', $user_id);
-                $path = '/wp-json/psqr/v' . $this::VERSION . '/author/' . $user->user_login;
-                $did = 'did:psqr:' . $_SERVER['HTTP_HOST'] . $path;
+                $path = '/author/' . $user->user_login;
+                $did = 'did:psqr:' . $_SERVER['HTTP_HOST'] . $this->path_prefix . $path;
+                $full_path = $this->path_prefix . '/wp-json/psqr/v' . $this::VERSION . $path;
 
                 // if identity dir is present, show link
                 if (in_array($user->user_login, $this->available_dids)) {
-                    return '<a href="' . $path . '" target="_blank">' . $did . '</a>';
+                    return '<a href="' . $full_path . '" target="_blank">' . $did . '</a>';
                 } else { // else provide input field to upload did
                     // get nonce and name
                     $nonce = wp_create_nonce( 'wp_rest' );
@@ -567,7 +580,7 @@ if ( !class_exists( 'PSQR' ) ) {
                         <button class="button js-show-did-upload"
                             data-name="' . $name . '"
                             data-nonce="' . $nonce . '"
-                            data-path="' . $path . '"
+                            data-path="' . $full_path . '"
                         />Upload DID</button>';
 
                     return $btn_html;

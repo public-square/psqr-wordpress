@@ -81,6 +81,9 @@ The internet is forever, though, and it is not possible to ensure that every cop
 
 == Changelog ==
 
+= 0.1.3 =
+* Added support for Wordpress installs that are not in the root domain
+
 = 0.1.2 =
 * Update token format to {token: JWSstring}
 * Add checks for required php extensions

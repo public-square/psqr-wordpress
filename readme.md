@@ -164,6 +164,9 @@ potentially preserved by someone, somewhere.
 
 ### Changelog
 
+#### 0.1.4
+* Added the ability to store and retrieve private keys
+
 #### 0.1.3
 * Added support for Wordpress installs that are not in the root domain
 

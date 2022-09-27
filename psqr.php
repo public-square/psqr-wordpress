@@ -6,7 +6,7 @@
 Plugin Name: Virtual Public Square
 Plugin URI: https://vpsqr.com/
 Description: Virtual Public Squares operate on identity. Add self-hosted, cryptographically verifiable, decentralized identity to your site and authors.
-Version: 0.1.3
+Version: 0.1.4
 Author: Virtual Public Square
 Author URI: https://vpsqr.com
 License: GPLv2
@@ -30,6 +30,7 @@ use Jose\Component\Signature\Algorithm\ES384;
 use Jose\Component\Signature\JWSVerifier;
 use Jose\Component\Signature\Serializer\CompactSerializer;
 use Jose\Component\Signature\Serializer\JWSSerializerManager;
+use Jose\Component\Signature\JWSBuilder;
 
 if ( ! function_exists('write_log')) {
     function write_log ( $log )  {
@@ -76,9 +77,16 @@ if ( !class_exists( 'PSQR' ) ) {
                     'status' => 401
                 ]
             ],
-            'did_error' => [
-                'code'    => 'did_error',
-                'message' => 'There was an error storing the did.',
+            'invalid_jwk' => [
+                'code'    => 'invalid_jwk',
+                'message' => 'The provided JWK was not found in the specified DID or is somehow invalid',
+                'data'    => [
+                    'status' => 401
+                ]
+            ],
+            'store_error' => [
+                'code'    => 'store_error',
+                'message' => 'There was an error storing or deleting the file.',
                 'data'    => [
                     'status' => 400
                 ]
@@ -96,6 +104,7 @@ if ( !class_exists( 'PSQR' ) ) {
         private $available_dids = array();
         private JWSSerializerManager $serializer_manager;
         private JWSVerifier $jws_verifier;
+        private JWSBuilder $jws_builder;
         private $path_prefix = '';
 
         function __construct() {
@@ -106,12 +115,11 @@ if ( !class_exists( 'PSQR' ) ) {
             $this->setup_dirs();
 
             $algorithmManager  = new AlgorithmManager([new ES384()]);
-            $this->jws_verifier = new JWSVerifier(
-                $algorithmManager
-            );
+            $this->jws_verifier = new JWSVerifier($algorithmManager);
             $this->serializer_manager = new JWSSerializerManager([
                 new CompactSerializer(),
             ]);
+            $this->jws_builder = new JWSBuilder($algorithmManager);
 
             // add notice on admin page
             add_action('after_plugin_row', array($this, 'add_ext_warning'));
@@ -132,6 +140,15 @@ if ( !class_exists( 'PSQR' ) ) {
                     array(
                         'methods' => WP_REST_Server::EDITABLE,
                         'callback' => array($this, 'api_put_response'),
+                        'permission_callback' => function () {
+                            return current_user_can('edit_users');
+                        }
+                    )
+                ));
+                register_rest_route( $base, '/key/author/(?P<name>[\w]+)', array(
+                    array(
+                        'methods' => WP_REST_Server::EDITABLE,
+                        'callback' => array($this, 'api_key_response'),
                         'permission_callback' => function () {
                             return current_user_can('edit_users');
                         }
@@ -230,10 +247,61 @@ if ( !class_exists( 'PSQR' ) ) {
             $response = $this->store_identity('/author/' . $name, $body);
             if ($response === false) {
                 write_log('ERROR: Unable to store identity for ' . $name);
-                wp_send_json(PSQR::RESPONSES['did_error'], 400);
+                wp_send_json(PSQR::RESPONSES['store_error'], 400);
             }
 
             return new WP_REST_RESPONSE(['message' => 'did:psqr document successfully uploaded']);
+        }
+
+        function api_key_response($request) {
+            $body = json_decode($request->get_body(), false);
+            $name = $request->get_url_params()['name'];
+
+            $request_did = $this->generate_did_string($name);
+
+            $kid = '';
+            $key_name = '';
+            if (isset($body->kid) !== false) {
+                $kid = $body->kid;
+                $parts = explode('#', $kid);
+
+                if ($parts[0] === $request_did && $parts[1] !== null) {
+                    $key_name = $parts[1];
+                }
+            }
+
+            if ($key_name == '') {
+                write_log('ERROR: KID not found for ' . $request_did);
+                wp_send_json([
+                    'code'    => 'kid_mismatch',
+                    'message' => 'Incorrect kid provided in key, must match: ' . $request_did,
+                    'data'    => [
+                        'status' => 400
+                    ]
+                ], 400);
+            }
+
+            // validate jwk
+            $valid_resp = $this->validate_key($body);
+            if ($valid_resp['valid'] === false) {
+                write_log('ERROR: invalid key ' . $valid_resp['message']);
+                wp_send_json([
+                    'code'    => 'jwk_invalid',
+                    'message' => $valid_resp['message'],
+                    'data'    => [
+                        'status' => 400
+                    ]
+                ], 400);
+            }
+
+            $user = get_user_by('login', $name);
+            $response = $this->store_key($user->ID, $key_name, $body);
+            if ($response === false) {
+                write_log('ERROR: Unable to store key for ' . $name);
+                wp_send_json(PSQR::RESPONSES['store_error'], 400);
+            }
+
+            return new WP_REST_RESPONSE(['message' => $kid . ' successfully uploaded']);
         }
 
         // function to retrieve did file data as an object
@@ -498,11 +566,111 @@ if ( !class_exists( 'PSQR' ) ) {
             $response = $this->store_identity($path, $newDid);
             if ($response === false) {
                 write_log('ERROR: there was an issue storing the DID for ' . $path);
-                wp_send_json(PSQR::RESPONSES['did_error'], 400);
+                wp_send_json(PSQR::RESPONSES['store_error'], 400);
             }
 
             write_log('INFO: update successful');
             wp_send_json($newDid, 200);
+        }
+
+        function validate_key($jwk)
+        {
+            $kid = $jwk->kid;
+            $key = '';
+            try {
+                $key = new JWK((array) $jwk);
+            } catch (\Throwable $th) {
+                return [
+                    'valid' => false,
+                    'message' => 'Unable to convert JWK to Key object'
+                ];
+            }
+
+            // get didDoc specified in header
+            preg_match('/did:psqr:[^\/]+([^#]+)/', $kid, $matches);
+            $kidPath = $matches[1];
+            $didDoc = $this->get_identity($kidPath);
+
+            if ($didDoc === false) {
+                return [
+                    'valid' => false,
+                    'message' => 'Unable to retrieve DID doc for JWK'
+                ];
+            }
+
+            // try to find valid public keys
+            $keys   = $didDoc->psqr->publicKeys;
+            $pubKey = false;
+
+            for ($j = 0; $j < \count($keys); ++$j) {
+                $k = $keys[$j];
+                if ($k->kid === $kid) {
+                    $pubKey = new JWK((array) $k);
+
+                    break;
+                }
+            }
+            // return false if no pubKey was found
+            if ($pubKey === false) {
+                return [
+                    'valid' => false,
+                    'message' => 'No pubkey matching ' . $kid . ' found in current DID doc'
+                ];
+            }
+
+            // verify provided JWK is the correct private key
+            $correctKey = false;
+            try {
+                $jws = $this->jws_builder
+                    ->create()                               // We want to create a new JWS
+                    ->withPayload('private key check')                  // We set the payload
+                    ->addSignature($key, ['alg' => 'ES384']) // We add a signature with a simple protected header
+                    ->build();
+                $correctKey = $this->jws_verifier->verifyWithKey($jws, $pubKey, 0);
+            } catch (\Throwable $th) {
+                return [
+                    'valid' => false,
+                    'message' => 'Error trying to validate key via JWS creation: ' . $th->getMessage()
+                ];
+            }
+
+            return [
+                'valid' => $correctKey,
+                'message' => 'Provided key is ' . ($correctKey ? 'valid' : 'invalid')
+            ];
+        }
+
+        function store_key($user_id, $key_name, $file_data) {
+            // try storing key in db
+            write_log('INFO: Storing key for ID: ' . $user_id . ', name: ' . $key_name);
+            try {
+                // check if duplicate
+                if ($file_data == json_decode(get_user_meta($user_id, $key_name, true))) {
+                    write_log('INFO: New key is same as stored, skipping');
+                    return true;
+                }
+                $response = update_user_meta($user_id, $key_name, json_encode($file_data));
+                return $response;
+            } catch (\Throwable $th) {
+                write_log('ERROR: Unable to store key ' . $th->getMessage());
+                return false;
+            }
+        }
+
+        public static function get_key($author, $key_name, $pass = '')
+        {
+            // find key in db
+            $user = get_user_by('login', $author);
+            $user_id = $user->ID;
+            write_log('INFO: Retrieving key for ID: ' . $user_id . ', name: ' . $key_name);
+            try {
+                $response = get_user_meta($user_id, $key_name, true);
+                if ($response == '') return false;
+                return json_decode($response);
+            } catch (\Throwable $th) {
+                write_log('ERROR: Unable to find key ' . $th->getMessage());
+                return false;
+            }
         }
 
         public function delete_did(string $path, string $body)
@@ -518,7 +686,7 @@ if ( !class_exists( 'PSQR' ) ) {
             $response = $this->delete_identity($path);
             if ($response === false) {
                 write_log('ERROR: there was an error deleting the DID for ' . $path);
-                wp_send_json(PSQR::RESPONSES['did_error'], 400);
+                wp_send_json(PSQR::RESPONSES['store_error'], 400);
             }
 
             write_log('INFO: delete successful');
@@ -564,23 +732,37 @@ if ( !class_exists( 'PSQR' ) ) {
                 $user = get_user_by('id', $user_id);
                 $path = '/author/' . $user->user_login;
                 $did = 'did:psqr:' . $_SERVER['HTTP_HOST'] . $this->path_prefix . $path;
-                $full_path = $this->path_prefix . '/wp-json/psqr/v' . $this::VERSION . $path;
+                $did_path = $this->path_prefix . '/wp-json/psqr/v' . $this::VERSION . $path;
+                $key_path = $this->path_prefix . '/wp-json/psqr/v' . $this::VERSION . '/key' . $path;
 
-                // if identity dir is present, show link
+                // get nonce and name
+                $nonce = wp_create_nonce( 'wp_rest' );
+                $name = $user->display_name;
+
+                // set html files
+                $html_files = wp_enqueue_script('did-upload', plugins_url( "js/upload.js", __FILE__)) .
+                wp_enqueue_style('did-upload-style', plugins_url( "css/upload-modal.css", __FILE__));
+
+                // if identity dir is present, show link and key upload
                 if (in_array($user->user_login, $this->available_dids)) {
-                    return '<a href="' . $full_path . '" target="_blank">' . $did . '</a>';
-                } else { // else provide input field to upload did
-                    // get nonce and name
-                    $nonce = wp_create_nonce( 'wp_rest' );
-                    $name = $user->display_name;
-
                     // set button html
-                    $btn_html = wp_enqueue_script('did-upload', plugins_url( "js/upload.js", __FILE__)) .
-                    wp_enqueue_style('did-upload-style', plugins_url( "css/upload-modal.css", __FILE__)) . '
+                    $btn_html = $html_files .
+                        '<a href="' . $did_path . '" target="_blank">' . $did . '</a><br>' .
+                        '<button class="button js-show-key-upload"
+                            data-did="' . $did . '"
+                            data-nonce="' . $nonce . '"
+                            data-path="' . $key_path . '"
+                        />Upload Private Key</button>';
+
+                    return $btn_html;
+                    return ;
+                } else { // else provide input field to upload did
+                    // set button html
+                    $btn_html = $html_files . '
                         <button class="button js-show-did-upload"
                             data-name="' . $name . '"
                             data-nonce="' . $nonce . '"
-                            data-path="' . $full_path . '"
+                            data-path="' . $did_path . '"
                         />Upload DID</button>';
 
                     return $btn_html;

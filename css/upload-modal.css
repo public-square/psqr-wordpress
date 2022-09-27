@@ -1,5 +1,5 @@
  /* The Modal (background) */
- .did-upload-modal {
+ .psqr-upload-modal {
     display: none; /* Hidden by default */
     position: fixed; /* Stay in place */
     z-index: 1; /* Sit on top */
@@ -12,12 +12,12 @@
     background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
   }
 
-  .did-upload-modal.modal-visible {
+  .psqr-upload-modal.modal-visible {
       display: block;
   }
-  
+
   /* Modal Content/Box */
-  .did-upload-content {
+  .psqr-upload-content {
     background-color: #fefefe;
     margin: 15% auto; /* 15% from the top and centered */
     padding: 20px;
@@ -25,32 +25,52 @@
     width: 50%;
   }
 
-  .did-upload-error {
+  .psqr-upload-form .form-table th {
+    width: 100%;
+  }
+
+  .psqr-upload-error, .psqr-upload-warning {
     display: none;
     width: 100%;
     background-color: rgb(255, 73, 73);
   }
 
-  .did-upload-error > * {
+  .psqr-upload-warning {
+    background-color: #ffc107;
+  }
+
+  .psqr-upload-error > * {
       margin: 1em;
       color: #fff !important;
   }
 
-  .did-upload-error.error-visible {
+  .psqr-upload-warning > * {
+    margin: 1em;
+  }
+
+  .psqr-upload-error.visible, .psqr-upload-warning.visible {
     display: inline-block;
   }
-  
+
   /* The Close Button */
-  .did-upload-close {
+  .psqr-upload-close {
     color: #aaa;
     float: right;
     font-size: 28px;
     font-weight: bold;
   }
-  
-  .did-upload-close:hover,
-  .did-upload-close:focus {
+
+  .psqr-upload-close:hover,
+  .psqr-upload-close:focus {
     color: black;
     text-decoration: none;
     cursor: pointer;
-  } 
+  }
+
+  .psqr-hidden {
+    display: none;
+  }
+
+  .psqr-visible {
+    display: initial;
+  }

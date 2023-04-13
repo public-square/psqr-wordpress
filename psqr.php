@@ -6,7 +6,7 @@
 Plugin Name: Virtual Public Square
 Plugin URI: https://vpsqr.com/
 Description: Virtual Public Squares operate on identity. Add self-hosted, cryptographically verifiable, decentralized identity to your site and authors.
-Version: 0.1.4
+Version: 0.1.5
 Author: Virtual Public Square
 Author URI: https://vpsqr.com
 License: GPLv2
@@ -31,6 +31,7 @@ use Jose\Component\Signature\JWSVerifier;
 use Jose\Component\Signature\Serializer\CompactSerializer;
 use Jose\Component\Signature\Serializer\JWSSerializerManager;
 use Jose\Component\Signature\JWSBuilder;
+use Jose\Component\KeyManagement\JWKFactory;
 
 if ( ! function_exists('write_log')) {
     function write_log ( $log )  {

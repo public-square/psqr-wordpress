@@ -7,10 +7,16 @@ namespace Composer\Autoload;
 class ComposerStaticInit8eb7a1087660ea6d4793d435fe5b949d
 {
     public static $prefixLengthsPsr4 = array (
+        'P' => 
+        array (
+            'Psr\\Http\\Message\\' => 17,
+            'Psr\\Http\\Client\\' => 16,
+        ),
         'J' => 
         array (
             'Jose\\Component\\Signature\\Algorithm\\' => 35,
             'Jose\\Component\\Signature\\' => 25,
+            'Jose\\Component\\KeyManagement\\' => 29,
             'Jose\\Component\\Core\\' => 20,
             'Jose\\' => 5,
         ),
@@ -25,6 +31,15 @@ class ComposerStaticInit8eb7a1087660ea6d4793d435fe5b949d
     );
 
     public static $prefixDirsPsr4 = array (
+        'Psr\\Http\\Message\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/psr/http-message/src',
+            1 => __DIR__ . '/..' . '/psr/http-factory/src',
+        ),
+        'Psr\\Http\\Client\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/psr/http-client/src',
+        ),
         'Jose\\Component\\Signature\\Algorithm\\' => 
         array (
             0 => __DIR__ . '/..' . '/web-token/jwt-signature-algorithm-ecdsa',
@@ -32,6 +47,10 @@ class ComposerStaticInit8eb7a1087660ea6d4793d435fe5b949d
         'Jose\\Component\\Signature\\' => 
         array (
             0 => __DIR__ . '/..' . '/web-token/jwt-signature',
+        ),
+        'Jose\\Component\\KeyManagement\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/web-token/jwt-key-mgmt',
         ),
         'Jose\\Component\\Core\\' => 
         array (

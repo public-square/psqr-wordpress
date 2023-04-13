@@ -4,7 +4,7 @@ Tags: did, identity, did:psqr
 Requires at least: 5.4
 Tested up to: 6.0.2
 Requires PHP: 7.4
-Stable tag: 0.1.5
+Stable tag: 0.1.6
 License: GPLv2
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,7 +81,7 @@ The internet is forever, though, and it is not possible to ensure that every cop
 
 == Changelog ==
 
-= 0.1.5 =
+= 0.1.6 =
 * Added JWK Factory to enable key creation
 
 = 0.1.4 =

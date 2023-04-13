@@ -164,7 +164,7 @@ potentially preserved by someone, somewhere.
 
 ### Changelog
 
-#### 0.1.5
+#### 0.1.6
 * Added JWK Factory to enable key creation
 
 #### 0.1.4

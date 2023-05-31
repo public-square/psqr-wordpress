@@ -112,7 +112,14 @@ Further information on the standards is available at https://vpsqr.com
 
 ### How do I create a did:psqr identity?
 
-You can generate DID:PSQR docs using the NodeJS command "psqr" (https://www.npmjs.com/package/psqr).
+You can generate DID:PSQR docs in two ways, manually or using generation feature built for wordpress.
+
+#### Wordpress generation feature.
+Wordpress generation feature will create the keys and place them in the correct locations.
+
+#### Manual via command line feature.
+
+Manually using the NodeJS command "psqr" (https://www.npmjs.com/package/psqr).
 Install "psqr" with the command
 
 `npm i -g psqr`
@@ -151,6 +158,8 @@ Soft deletes are requested, and hard deletes are strongly recommended, typically
 legal reasons. Those operating Virtual Public Squares are expected to delete any copies
 of content in either delete list.
 
+Wordpress functionality provides a delete button that does a 'hard' delete removal of information.
+
 The internet is forever, though, and it is not possible to ensure that every copy of a
 portable file has been deleted. Provenance travels with the content, and is thus also
 potentially preserved by someone, somewhere.
@@ -163,6 +172,8 @@ potentially preserved by someone, somewhere.
 ![upload modal](assets/screenshot-2.png?raw=true "Title")
 
 ### Changelog
+#### 0.1.5
+* Added the ability to generate, upload and delete private keys
 
 #### 0.1.4
 * Added the ability to store and retrieve private keys

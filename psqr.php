@@ -6,7 +6,7 @@
 Plugin Name: Virtual Public Square
 Plugin URI: https://vpsqr.com/
 Description: Virtual Public Squares operate on identity. Add self-hosted, cryptographically verifiable, decentralized identity to your site and authors.
-Version: 0.1.4
+Version: 0.1.5
 Author: Virtual Public Square
 Author URI: https://vpsqr.com
 License: GPLv2
@@ -31,6 +31,7 @@ use Jose\Component\Signature\JWSVerifier;
 use Jose\Component\Signature\Serializer\CompactSerializer;
 use Jose\Component\Signature\Serializer\JWSSerializerManager;
 use Jose\Component\Signature\JWSBuilder;
+use Jose\Component\KeyManagement\JWKFactory;
 
 if ( ! function_exists('write_log')) {
     function write_log ( $log )  {
@@ -143,6 +144,13 @@ if ( !class_exists( 'PSQR' ) ) {
                         'permission_callback' => function () {
                             return current_user_can('edit_users');
                         }
+                    ),
+					array(
+                        'methods' => WP_REST_Server::DELETABLE,
+                        'callback' => array($this, 'api_del_response'),
+                        'permission_callback' => function () {
+                            return current_user_can('edit_users');
+                        }
                     )
                 ));
                 register_rest_route( $base, '/key/author/(?P<name>[\w]+)', array(
@@ -159,6 +167,9 @@ if ( !class_exists( 'PSQR' ) ) {
             // setup did column in user table
             add_filter( 'manage_users_columns', array($this, 'add_did_column'));
             add_filter( 'manage_users_custom_column', array($this, 'add_did_value'), 10, 3 );
+			
+			add_action('wp_ajax_makeDID_action', array($this, 'makeDID_action'));
+			add_action('admin_enqueue_scripts', array($this, 'makeDID_enqueue'));
         }
 
         static function check_extensions(): array {
@@ -199,6 +210,10 @@ if ( !class_exists( 'PSQR' ) ) {
             return true;
         }
 
+		/*  
+		 * JSON request handler: path direct to author
+		 * return DID:PSQR file, private key
+		*/
         function api_get_response($data) {
             $identity = $this->get_identity();
             if (isset($data['name'])) {
@@ -214,6 +229,11 @@ if ( !class_exists( 'PSQR' ) ) {
             return new WP_REST_Response($identity);
         }
 
+		/*  
+		 * JSON request handler: path direct to author
+		 * upload DID:PSQR file, upload private key
+		 * return message to indicate files are created 
+		*/
         function api_put_response($request) {
             $body = json_decode($request->get_body(), false);
             $name = $request->get_url_params()['name'];
@@ -253,6 +273,11 @@ if ( !class_exists( 'PSQR' ) ) {
             return new WP_REST_RESPONSE(['message' => 'did:psqr document successfully uploaded']);
         }
 
+		/*  
+		 * JSON request handler: path contains 'key' to author
+		 * create the user private key
+		 * return message to indicate files are created 
+		*/
         function api_key_response($request) {
             $body = json_decode($request->get_body(), false);
             $name = $request->get_url_params()['name'];
@@ -361,7 +386,7 @@ if ( !class_exists( 'PSQR' ) ) {
                 }
             }
 
-            return file_put_contents($full_path . 'identity.json', json_encode($file_data));
+            return file_put_contents($full_path . 'identity.json', json_encode($file_data, JSON_PRESERVE_ZERO_FRACTION | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         }
 
         function delete_identity($path) {
@@ -649,7 +674,7 @@ if ( !class_exists( 'PSQR' ) ) {
                     write_log('INFO: New key is same as stored, skipping');
                     return true;
                 }
-                $response = update_user_meta($user_id, $key_name, json_encode($file_data));
+                $response = update_user_meta($user_id, $key_name, json_encode($file_data, JSON_PRESERVE_ZERO_FRACTION | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
                 return $response;
             } catch (\Throwable $th) {
                 write_log('ERROR: Unable to store key ' . $th->getMessage());
@@ -726,51 +751,170 @@ if ( !class_exists( 'PSQR' ) ) {
             return $column;
         }
 
-        function add_did_value($val, $column_name, $user_id) {
+		function add_did_value($val, $column_name, $user_id) {
             if ($column_name === 'did') {
                 // get user values
                 $user = get_user_by('id', $user_id);
+				$ava = get_avatar_url($user_id);
+				$desc= htmlentities(get_the_author_meta('description', $user_id));
+				$tag = get_option('blogdescription');
                 $path = '/author/' . $user->user_login;
-                $did = 'did:psqr:' . $_SERVER['HTTP_HOST'] . $this->path_prefix . $path;
+                $didval = $this->generate_did_string($user->user_login); //'did:psqr:' . $_SERVER['HTTP_HOST'] . $this->path_prefix . $path;
+				$test = $this->get_identity($path);
+				$did = (!$test)? '':'DID found';
                 $did_path = $this->path_prefix . '/wp-json/psqr/v' . $this::VERSION . $path;
                 $key_path = $this->path_prefix . '/wp-json/psqr/v' . $this::VERSION . '/key' . $path;
-
+				
+				
                 // get nonce and name
                 $nonce = wp_create_nonce( 'wp_rest' );
                 $name = $user->display_name;
-
+				$privatekey = $this->get_key($user->user_login, 'publish');
+				
                 // set html files
-                $html_files = wp_enqueue_script('did-upload', plugins_url( "js/upload.js", __FILE__)) .
-                wp_enqueue_style('did-upload-style', plugins_url( "css/upload-modal.css", __FILE__));
-
-                // if identity dir is present, show link and key upload
-                if (in_array($user->user_login, $this->available_dids)) {
-                    // set button html
-                    $btn_html = $html_files .
-                        '<a href="' . $did_path . '" target="_blank">' . $did . '</a><br>' .
+                $html_files = wp_enqueue_script('did-upload', plugins_url( "js/upload.js", __FILE__), array() , time()) ;
+                $html_files .= wp_enqueue_style('did-upload-style', plugins_url( "css/upload-modal.css", __FILE__), array() , time());
+				
+				if (!in_array($user->user_login, $this->available_dids)) { $did=''; }
+				if ($privatekey) { $did .= ($did)? ', PRIVATE KEY found' : 'PRIVATE KEY found'; }
+				
+				$btn_html = $html_files .
+                        '<a href="' . $did_path . '" target="_blank">' .$did. '</a><br>' .
                         '<button class="button js-show-key-upload"
-                            data-did="' . $did . '"
+                            data-did="' . $didval . '"
+							data-name="' . $user->user_login . '"
+							data-ava="' . $ava . '"
+							data-tag="' . $tag . '"
+							data-url="'.$user->user_url.'"
+							data-bio="'.$desc.'" 
+							data-disnam="'.$name.'"
                             data-nonce="' . $nonce . '"
-                            data-path="' . $key_path . '"
-                        />Upload Private Key</button>';
-
-                    return $btn_html;
-                    return ;
-                } else { // else provide input field to upload did
-                    // set button html
-                    $btn_html = $html_files . '
-                        <button class="button js-show-did-upload"
-                            data-name="' . $name . '"
+                            data-path="' . $key_path . '" />Generate</button>&nbsp;&nbsp' .
+                        '<button class="button js-show-did-upload"
+							data-name="' . $name . '"
+							data-did="' . $didval . '"
                             data-nonce="' . $nonce . '"
-                            data-path="' . $did_path . '"
-                        />Upload DID</button>';
-
-                    return $btn_html;
-                }
+							data-keypath="' . $key_path . '"
+                            data-path="' . $did_path . '" />Upload</button>&nbsp;&nbsp';
+				if($did !== ''){
+					$btn_html .='<button class="button js-show-del-did"
+								data-did="' . $didval . '"
+								data-nonce="' . $nonce . '"
+								data-path="' . $did_path . '" />Delete</button>';
+				}
+				return $btn_html;
             }
 
             return $val;
-        }
+        } 
+
+		
+		/*  
+		 * AJAX request handler
+		 * create a DID:PSQR file, place in the expected folder location
+		 * create the private key store in user field
+		 * return message to indicate files are created 
+		*/
+		static function makeDID_action() {
+			global $wpdb;  								// global WP variables
+			$pd = new PSQR();
+			$upload_dir = wp_upload_dir();
+			
+			//find selected user
+			$userObj = get_user_by('login', $_POST['name']);
+            $user_id = $userObj->ID;
+			$user = $userObj->user_nicename;
+			
+			//cleanup user entered data
+			// Check our textbox options contain no HTML tags - if so strip them out
+			$desc = wp_filter_nohtml_kses($_POST['desc']);
+			$bio = wp_filter_nohtml_kses($_POST['bio']);
+			$tagline = wp_filter_nohtml_kses($_POST['tagline']);
+			$fulname = wp_filter_nohtml_kses($_POST['fullname']);
+			//lowercase, cleanup a user entered webaddress
+			$website = strtolower(str_replace(" ","",preg_replace("/[^a-zA-Z0-9.:\/]/", "", $_POST['weburl'])));
+			$bioimage = strtolower(str_replace(" ","",preg_replace("/[^a-zA-Z0-9.:\/]/", "", $_POST['imgurl'])));
+			
+			//build paths:objects for storage
+			$path = "author/{$user}";		
+			$request_did = $pd->generate_did_string($user);
+			$keyname = "publish";
+			//make this a JWK object
+			$prvkey = JWKFactory::createECKey('P-384');
+			$pubk = $prvkey->toPublic();
+			
+			//build PUBLIC JSON contents
+			$pubObj = array(
+				'kty'=>$pubk->get('kty'),
+				'x'=>$pubk->get('x'),
+				'y'=>$pubk->get('y'),
+				'crv'=>$pubk->get('crv'),
+				'alg'=>'ES384',
+				'kid'=>$request_did.'#'.$keyname);
+			
+			//build PRIVATE KEY, user storage
+			$prvObj = array(
+				'kty'=>$pubk->get('kty'),
+				'x'=>$pubk->get('x'),
+				'y'=>$pubk->get('y'),
+				'crv'=>$pubk->get('crv'),
+				'd'=>$prvkey->get('d'),
+				'alg'=>'ES384',
+				'kid'=>$request_did.'#'.$keyname);
+			
+			//set permission
+			$perObj = array(
+				'grant'=>["publish","provenance"],
+				'kid'=>$request_did.'#'.$keyname);
+			
+			//build the DID file format
+			$tm = (int) round(floor(microtime(true) * 1000));
+			$DIDObj = array('@context' => ['https://www.w3.org/ns/did/v1','https://vpsqr.com/ns/did-psqr/v1'], 'id'=>$request_did);
+			$DIDObj['psqr'] = array(
+				'publicIdentity'=> array('name'=>$fulname, 'tagline'=>$tagline, 'url'=>$website, 'image'=>$bioimage, 'bio'=>$bio, 'description'=>$desc),
+				'publicKeys'=>[$pubObj], 'permissions'=>[$perObj], 'updated'=>$tm
+			);
+			
+			//store the json identity file and the user:privatekey
+			$res1 = $pd->store_identity($path, $DIDObj);
+			$res2 = $pd->store_key($user_id, 'publish', $prvObj);
+			if ($res2 === false) {
+                $msg = 'ERROR: Unable to store key for ' . $user;
+            }else{
+				$msg = 'DID public and private keys have been created for: '.$request_did;
+			}
+			echo $msg;
+			wp_die();
+			
+		}
+		// Enqueue your JS file
+		static function makeDID_enqueue($hook) {   
+			wp_enqueue_script( 'did-upload', plugins_url( '/js/upload.js', __FILE__ ),array() , time());
+			wp_localize_script( 'did-upload', 'ajax_object',array( 'ajax_url' => admin_url( 'admin-ajax.php' )));
+		}
+		
+		/*  
+		 * JSON request handler
+		 * delete DID:PSQR file, private key
+		 * return message to indicate files are removed 
+		*/
+		function api_del_response($data) {
+			$path = '/author/'.$data['name'];
+			$userObj = get_user_by('login', $data['name']);
+            $user_id = $userObj->ID;
+			
+			$res = $this->delete_identity($path);					//toss the file
+			$res2 = $this->store_key($user_id, 'publish', '');		//clear the key value from user
+			
+			if ($res === false) {
+                $msg = 'ERROR: Unable to delete DID for ' . $data['name'];
+            }else{
+				$msg ='did:psqr document deleted:'.$res;
+				$msg .=', private key deleted:'.$res2;
+			}			
+            return new WP_REST_RESPONSE(['message' =>  $msg]);
+        } 
+		
     }
 }
 

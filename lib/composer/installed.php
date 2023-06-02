@@ -6,7 +6,7 @@
     'aliases' => 
     array (
     ),
-    'reference' => '418c9dbfd056f57e9180aee31e8ed1493aead3b5',
+    'reference' => '05df8ae520e9a0f5b8fd68114612b545e240018b',
     'name' => 'psqr/virtual-public-square',
   ),
   'versions' => 
@@ -27,7 +27,34 @@
       'aliases' => 
       array (
       ),
-      'reference' => '418c9dbfd056f57e9180aee31e8ed1493aead3b5',
+      'reference' => '05df8ae520e9a0f5b8fd68114612b545e240018b',
+    ),
+    'psr/http-client' => 
+    array (
+      'pretty_version' => '1.0.2',
+      'version' => '1.0.2.0',
+      'aliases' => 
+      array (
+      ),
+      'reference' => '0955afe48220520692d2d09f7ab7e0f93ffd6a31',
+    ),
+    'psr/http-factory' => 
+    array (
+      'pretty_version' => '1.0.2',
+      'version' => '1.0.2.0',
+      'aliases' => 
+      array (
+      ),
+      'reference' => 'e616d01114759c4c489f93b099585439f795fe35',
+    ),
+    'psr/http-message' => 
+    array (
+      'pretty_version' => '2.0',
+      'version' => '2.0.0.0',
+      'aliases' => 
+      array (
+      ),
+      'reference' => '402d35bcb92c70c026d1a6a9883f06b2ead23d71',
     ),
     'spomky-labs/base64url' => 
     array (
@@ -46,6 +73,15 @@
       array (
       ),
       'reference' => '0909efa4fe2c3e2d537922b3ea1b65eb8203686c',
+    ),
+    'web-token/jwt-key-mgmt' => 
+    array (
+      'pretty_version' => 'v2.2.0',
+      'version' => '2.2.0.0',
+      'aliases' => 
+      array (
+      ),
+      'reference' => '03fafa105970f0e5a7ae44c39bc8f0576ebcb23b',
     ),
     'web-token/jwt-signature' => 
     array (

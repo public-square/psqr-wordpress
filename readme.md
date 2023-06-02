@@ -175,6 +175,9 @@ potentially preserved by someone, somewhere.
 #### 0.1.5
 * Added the ability to generate, upload and delete private keys
 
+#### 0.1.7
+* Added JWK Factory to enable key creation
+
 #### 0.1.4
 * Added the ability to store and retrieve private keys
 

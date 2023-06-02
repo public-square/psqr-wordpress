@@ -6,7 +6,7 @@
 Plugin Name: Virtual Public Square
 Plugin URI: https://vpsqr.com/
 Description: Virtual Public Squares operate on identity. Add self-hosted, cryptographically verifiable, decentralized identity to your site and authors.
-Version: 0.1.5
+Version: 0.1.7
 Author: Virtual Public Square
 Author URI: https://vpsqr.com
 License: GPLv2

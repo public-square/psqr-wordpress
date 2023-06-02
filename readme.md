@@ -172,7 +172,7 @@ potentially preserved by someone, somewhere.
 ![upload modal](assets/screenshot-2.png?raw=true "Title")
 
 ### Changelog
-#### 0.1.5
+#### 0.1.8
 * Added the ability to generate, upload and delete private keys
 
 #### 0.1.7

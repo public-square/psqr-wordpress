@@ -4,7 +4,7 @@ Tags: did, identity, did:psqr
 Requires at least: 5.4
 Tested up to: 6.0.2
 Requires PHP: 7.4
-Stable tag: 0.1.7
+Stable tag: 0.1.8
 License: GPLv2
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,9 @@ The internet is forever, though, and it is not possible to ensure that every cop
 2. DID upload modal
 
 == Changelog ==
+
+= 0.1.8 =
+* Added the ability to generate, upload and delete private keys
 
 = 0.1.7 =
 * Added JWK Factory to enable key creation
